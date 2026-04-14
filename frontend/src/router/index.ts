@@ -29,12 +29,7 @@ const routes: RouteRecordRaw[] = [
   // ==================== Public Routes ====================
   {
     path: '/home',
-    name: 'Home',
-    component: () => import('@/views/HomeView.vue'),
-    meta: {
-      requiresAuth: false,
-      title: 'Home'
-    }
+    redirect: '/login'
   },
   {
     path: '/login',
@@ -124,7 +119,7 @@ const routes: RouteRecordRaw[] = [
   // ==================== User Routes ====================
   {
     path: '/',
-    redirect: '/home'
+    redirect: '/login'
   },
   {
     path: '/dashboard',

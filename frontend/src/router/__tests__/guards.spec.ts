@@ -153,8 +153,8 @@ describe('路由守卫逻辑', () => {
       expect(redirect).toBeNull()
     })
 
-    it('访问 /home 公开页面允许通过', () => {
-      const redirect = simulateGuard('/home', { requiresAuth: false }, authState)
+    it('访问 /forgot-password 公开页面允许通过', () => {
+      const redirect = simulateGuard('/forgot-password', { requiresAuth: false }, authState)
       expect(redirect).toBeNull()
     })
   })
@@ -296,14 +296,14 @@ describe('路由守卫逻辑', () => {
   })
 
   describe('Backend Mode', () => {
-    it('unauthenticated: /home redirects to /login', () => {
+    it('unauthenticated: /forgot-password redirects to /login', () => {
       const authState: MockAuthState = {
         isAuthenticated: false,
         isAdmin: false,
         isSimpleMode: false,
         backendModeEnabled: true,
       }
-      const redirect = simulateGuard('/home', { requiresAuth: false }, authState)
+      const redirect = simulateGuard('/forgot-password', { requiresAuth: false }, authState)
       expect(redirect).toBe('/login')
     })
 
