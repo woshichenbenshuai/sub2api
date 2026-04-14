@@ -1748,7 +1748,7 @@ const executeCcsImport = (row: ApiKey, clientType: 'claude' | 'gemini') => {
       };
     }
   })`
-  const providerName = (publicSettings.value?.site_name || 'sub2api').trim() || 'sub2api'
+  const providerName = (publicSettings.value?.site_name || 'gateway').trim() || 'gateway'
 
   const params = new URLSearchParams({
     resource: 'provider',
