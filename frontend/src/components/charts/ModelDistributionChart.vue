@@ -113,8 +113,8 @@
               <th class="pb-2 text-left">{{ t('admin.dashboard.model') }}</th>
               <th class="pb-2 text-right">{{ t('admin.dashboard.requests') }}</th>
               <th class="pb-2 text-right">{{ t('admin.dashboard.tokens') }}</th>
-              <th class="pb-2 text-right">{{ t('admin.dashboard.actual') }}</th>
-              <th class="pb-2 text-right">{{ t('admin.dashboard.standard') }}</th>
+              <th v-if="showCostColumns" class="pb-2 text-right">{{ t('admin.dashboard.actual') }}</th>
+              <th v-if="showCostColumns" class="pb-2 text-right">{{ t('admin.dashboard.standard') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -139,15 +139,15 @@
                 <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">
                   {{ formatTokens(model.total_tokens) }}
                 </td>
-                <td class="py-1.5 text-right text-green-600 dark:text-green-400">
+                <td v-if="showCostColumns" class="py-1.5 text-right text-green-600 dark:text-green-400">
                   ${{ formatCost(model.actual_cost) }}
                 </td>
-                <td class="py-1.5 text-right text-gray-400 dark:text-gray-500">
+                <td v-if="showCostColumns" class="py-1.5 text-right text-gray-400 dark:text-gray-500">
                   ${{ formatCost(model.cost) }}
                 </td>
               </tr>
               <tr v-if="expandedKey === `model-${model.model}`">
-                <td colspan="5" class="p-0">
+                <td :colspan="showCostColumns ? 5 : 3" class="p-0">
                   <UserBreakdownSubTable
                     :items="breakdownItems"
                     :loading="breakdownLoading"
@@ -266,6 +266,7 @@ const props = withDefaults(defineProps<{
   metric?: DistributionMetric
   showSourceToggle?: boolean
   showMetricToggle?: boolean
+  showCostColumns?: boolean
   rankingLoading?: boolean
   rankingError?: boolean
   startDate?: string
@@ -284,6 +285,7 @@ const props = withDefaults(defineProps<{
   metric: 'tokens',
   showSourceToggle: false,
   showMetricToggle: false,
+  showCostColumns: true,
   rankingLoading: false,
   rankingError: false
 })
@@ -324,6 +326,7 @@ const emit = defineEmits<{
 }>()
 
 const enableRankingView = computed(() => props.enableRankingView)
+const showCostColumns = computed(() => props.showCostColumns)
 const activeView = ref<'model_distribution' | 'spending_ranking'>('model_distribution')
 
 const chartColors = [
