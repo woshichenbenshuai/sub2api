@@ -340,7 +340,7 @@ export default {
     channels: '渠道管理',
     subscriptions: '订阅管理',
     accounts: '账号管理',
-    proxies: 'IP管理',
+    proxies: '代理管理',
     redeemCodes: '兑换码',
     ops: '运维监控',
     promoCodes: '优惠码',
