@@ -83,12 +83,6 @@
           </span>
         </template>
 
-        <template #cell-billing_mode="{ row }">
-          <span class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium" :class="getBillingModeBadgeClass(row.billing_mode)">
-            {{ getBillingModeLabel(row.billing_mode, t) }}
-          </span>
-        </template>
-
         <template #cell-tokens="{ row }">
           <!-- 图片生成请求（仅按次计费时显示图片格式） -->
           <div v-if="row.image_count > 0 && row.billing_mode === BILLING_MODE_IMAGE" class="flex items-center gap-1.5">
@@ -241,7 +235,7 @@ import { useI18n } from 'vue-i18n'
 import { formatDateTime, formatReasoningEffort } from '@/utils/format'
 import { formatCacheTokens } from '@/utils/formatters'
 import { resolveUsageRequestType } from '@/utils/usageRequestType'
-import { getBillingModeLabel, getBillingModeBadgeClass, BILLING_MODE_IMAGE } from '@/utils/billingMode'
+import { BILLING_MODE_IMAGE } from '@/utils/billingMode'
 
 import DataTable from '@/components/common/DataTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'

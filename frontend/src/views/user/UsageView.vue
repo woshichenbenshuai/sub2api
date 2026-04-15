@@ -167,13 +167,6 @@
             </span>
           </template>
 
-          <template #cell-billing_mode="{ row }">
-            <span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium"
-                  :class="getBillingModeBadgeClass(row.billing_mode)">
-              {{ getBillingModeLabel(row.billing_mode, t) }}
-            </span>
-          </template>
-
           <template #cell-tokens="{ row }">
             <!-- 图片生成请求（仅按次计费时显示图片格式） -->
             <div v-if="row.image_count > 0 && row.billing_mode === 'image'" class="flex items-center gap-1.5">
@@ -397,7 +390,6 @@ import { formatDateTime, formatReasoningEffort } from '@/utils/format'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { formatCacheTokens } from '@/utils/formatters'
 import { resolveUsageRequestType } from '@/utils/usageRequestType'
-import { getBillingModeLabel, getBillingModeBadgeClass } from '@/utils/billingMode'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -418,7 +410,6 @@ const columns = computed<Column[]>(() => [
   { key: 'reasoning_effort', label: t('usage.reasoningEffort'), sortable: false },
   { key: 'endpoint', label: t('usage.endpoint'), sortable: false },
   { key: 'stream', label: t('usage.type'), sortable: false },
-  { key: 'billing_mode', label: t('admin.usage.billingMode'), sortable: false },
   { key: 'tokens', label: t('usage.tokens'), sortable: false },
   { key: 'first_token', label: t('usage.firstToken'), sortable: false },
   { key: 'duration', label: t('usage.duration'), sortable: false },
@@ -704,7 +695,6 @@ const exportToCSV = async () => {
       'Reasoning Effort',
       'Inbound Endpoint',
       'Type',
-      'Billing Mode',
       'Input Tokens',
       'Output Tokens',
       'Cache Read Tokens',
@@ -721,7 +711,6 @@ const exportToCSV = async () => {
         formatReasoningEffort(log.reasoning_effort),
         log.inbound_endpoint || '',
         getRequestTypeExportText(log),
-        getBillingModeLabel(log.billing_mode, t),
         log.input_tokens,
         log.output_tokens,
         log.cache_read_tokens,
