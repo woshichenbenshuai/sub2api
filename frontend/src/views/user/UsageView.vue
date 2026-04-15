@@ -2,7 +2,7 @@
   <AppLayout>
     <TablePageLayout>
       <template #actions>
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div class="grid grid-cols-2 gap-4 lg:grid-cols-3">
           <!-- Total Requests -->
           <div class="card p-4">
           <div class="flex items-center gap-3">
@@ -39,28 +39,6 @@
               <p class="text-xs text-gray-500 dark:text-gray-400">
                 {{ t('usage.in') }}: {{ formatTokens(usageStats?.total_input_tokens || 0) }} /
                 {{ t('usage.out') }}: {{ formatTokens(usageStats?.total_output_tokens || 0) }}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Total Cost -->
-        <div class="card p-4">
-          <div class="flex items-center gap-3">
-            <div class="rounded-lg bg-green-100 p-2 dark:bg-green-900/30">
-              <Icon name="dollar" size="md" class="text-green-600 dark:text-green-400" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                {{ t('usage.totalCost') }}
-              </p>
-              <p class="text-xl font-bold text-green-600 dark:text-green-400">
-                ${{ (usageStats?.total_actual_cost || 0).toFixed(4) }}
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                {{ t('usage.actualCost') }} /
-                <span class="line-through">${{ (usageStats?.total_cost || 0).toFixed(4) }}</span>
-                {{ t('usage.standardCost') }}
               </p>
             </div>
           </div>
@@ -277,30 +255,6 @@
             </div>
           </template>
 
-          <template #cell-cost="{ row }">
-            <div class="flex items-center gap-1.5 text-sm">
-              <span class="font-medium text-green-600 dark:text-green-400">
-                ${{ row.actual_cost.toFixed(6) }}
-              </span>
-              <!-- Cost Detail Tooltip -->
-              <div
-                class="group relative"
-                @mouseenter="showTooltip($event, row)"
-                @mouseleave="hideTooltip"
-              >
-                <div
-                  class="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-gray-100 transition-colors group-hover:bg-blue-100 dark:bg-gray-700 dark:group-hover:bg-blue-900/50"
-                >
-                  <Icon
-                    name="infoCircle"
-                    size="xs"
-                    class="text-gray-400 group-hover:text-blue-500 dark:text-gray-500 dark:group-hover:text-blue-400"
-                  />
-                </div>
-              </div>
-            </div>
-          </template>
-
           <template #cell-first_token="{ row }">
             <span
               v-if="row.first_token_ms != null"
@@ -422,85 +376,6 @@
     </div>
   </Teleport>
 
-  <!-- Tooltip Portal -->
-  <Teleport to="body">
-    <div
-      v-if="tooltipVisible"
-      class="fixed z-[9999] pointer-events-none -translate-y-1/2"
-      :style="{
-        left: tooltipPosition.x + 'px',
-        top: tooltipPosition.y + 'px'
-      }"
-    >
-      <div
-        class="whitespace-nowrap rounded-lg border border-gray-700 bg-gray-900 px-3 py-2.5 text-xs text-white shadow-xl dark:border-gray-600 dark:bg-gray-800"
-      >
-        <div class="space-y-1.5">
-          <!-- Cost Breakdown -->
-          <div class="mb-2 border-b border-gray-700 pb-1.5">
-            <div class="text-xs font-semibold text-gray-300 mb-1">{{ t('usage.costDetails') }}</div>
-            <div v-if="tooltipData && tooltipData.input_cost > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.inputCost') }}</span>
-              <span class="font-medium text-white">${{ tooltipData.input_cost.toFixed(6) }}</span>
-            </div>
-            <div v-if="tooltipData && tooltipData.output_cost > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.outputCost') }}</span>
-              <span class="font-medium text-white">${{ tooltipData.output_cost.toFixed(6) }}</span>
-            </div>
-            <!-- Token billing: show unit prices per 1M tokens -->
-            <template v-if="!tooltipData?.billing_mode || tooltipData.billing_mode === 'token'">
-              <div v-if="tooltipData && tooltipData.input_tokens > 0" class="flex items-center justify-between gap-4">
-                <span class="text-gray-400">{{ t('usage.inputTokenPrice') }}</span>
-                <span class="font-medium text-sky-300">{{ formatTokenPricePerMillion(tooltipData.input_cost, tooltipData.input_tokens) }} {{ t('usage.perMillionTokens') }}</span>
-              </div>
-              <div v-if="tooltipData && tooltipData.output_tokens > 0" class="flex items-center justify-between gap-4">
-                <span class="text-gray-400">{{ t('usage.outputTokenPrice') }}</span>
-                <span class="font-medium text-violet-300">{{ formatTokenPricePerMillion(tooltipData.output_cost, tooltipData.output_tokens) }} {{ t('usage.perMillionTokens') }}</span>
-              </div>
-            </template>
-            <!-- Per-request / image billing: show unit price -->
-            <div v-else class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ tooltipData.billing_mode === 'image' ? t('usage.imageUnitPrice') : t('usage.unitPrice') }}</span>
-              <span class="font-medium text-sky-300">${{ tooltipData.total_cost?.toFixed(6) || '0.000000' }}</span>
-            </div>
-            <div v-if="tooltipData && tooltipData.cache_creation_cost > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.cacheCreationCost') }}</span>
-              <span class="font-medium text-white">${{ tooltipData.cache_creation_cost.toFixed(6) }}</span>
-            </div>
-            <div v-if="tooltipData && tooltipData.cache_read_cost > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.cacheReadCost') }}</span>
-              <span class="font-medium text-white">${{ tooltipData.cache_read_cost.toFixed(6) }}</span>
-            </div>
-          </div>
-          <!-- Rate and Summary -->
-          <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.serviceTier') }}</span>
-            <span class="font-semibold text-cyan-300">{{ getUsageServiceTierLabel(tooltipData?.service_tier, t) }}</span>
-          </div>
-          <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.rate') }}</span>
-            <span class="font-semibold text-blue-400"
-              >{{ formatMultiplier(tooltipData?.rate_multiplier || 1) }}x</span
-            >
-          </div>
-          <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.original') }}</span>
-            <span class="font-medium text-white">${{ tooltipData?.total_cost.toFixed(6) }}</span>
-          </div>
-          <div class="flex items-center justify-between gap-6 border-t border-gray-700 pt-1.5">
-            <span class="text-gray-400">{{ t('usage.billed') }}</span>
-            <span class="font-semibold text-green-400"
-              >${{ tooltipData?.actual_cost.toFixed(6) }}</span
-            >
-          </div>
-        </div>
-        <!-- Tooltip Arrow (left side) -->
-        <div
-          class="absolute right-full top-1/2 h-0 w-0 -translate-y-1/2 border-b-[6px] border-r-[6px] border-t-[6px] border-b-transparent border-r-gray-900 border-t-transparent dark:border-r-gray-800"
-        ></div>
-      </div>
-    </div>
-  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -520,9 +395,7 @@ import type { UsageLog, ApiKey, UsageQueryParams, UsageStatsResponse } from '@/t
 import type { Column } from '@/components/common/types'
 import { formatDateTime, formatReasoningEffort } from '@/utils/format'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
-import { formatCacheTokens, formatMultiplier } from '@/utils/formatters'
-import { formatTokenPricePerMillion } from '@/utils/usagePricing'
-import { getUsageServiceTierLabel } from '@/utils/usageServiceTier'
+import { formatCacheTokens } from '@/utils/formatters'
 import { resolveUsageRequestType } from '@/utils/usageRequestType'
 import { getBillingModeLabel, getBillingModeBadgeClass } from '@/utils/billingMode'
 
@@ -530,11 +403,6 @@ const { t } = useI18n()
 const appStore = useAppStore()
 
 let abortController: AbortController | null = null
-
-// Tooltip state
-const tooltipVisible = ref(false)
-const tooltipPosition = ref({ x: 0, y: 0 })
-const tooltipData = ref<UsageLog | null>(null)
 
 // Token tooltip state
 const tokenTooltipVisible = ref(false)
@@ -552,7 +420,6 @@ const columns = computed<Column[]>(() => [
   { key: 'stream', label: t('usage.type'), sortable: false },
   { key: 'billing_mode', label: t('admin.usage.billingMode'), sortable: false },
   { key: 'tokens', label: t('usage.tokens'), sortable: false },
-  { key: 'cost', label: t('usage.cost'), sortable: false },
   { key: 'first_token', label: t('usage.firstToken'), sortable: false },
   { key: 'duration', label: t('usage.duration'), sortable: false },
   { key: 'created_at', label: t('usage.time'), sortable: true },
@@ -843,8 +710,6 @@ const exportToCSV = async () => {
       'Cache Read Tokens',
       'Cache Creation Tokens',
       'Rate Multiplier',
-      'Billed Cost',
-      'Original Cost',
       'First Token (ms)',
       'Duration (ms)'
     ]
@@ -862,8 +727,6 @@ const exportToCSV = async () => {
         log.cache_read_tokens,
         log.cache_creation_tokens,
         log.rate_multiplier,
-        log.actual_cost.toFixed(8),
-        log.total_cost.toFixed(8),
         log.first_token_ms ?? '',
         log.duration_ms
       ].map(escapeCSVValue)
@@ -889,23 +752,6 @@ const exportToCSV = async () => {
   } finally {
     exporting.value = false
   }
-}
-
-// Tooltip functions
-const showTooltip = (event: MouseEvent, row: UsageLog) => {
-  const target = event.currentTarget as HTMLElement
-  const rect = target.getBoundingClientRect()
-
-  tooltipData.value = row
-  // Position to the right of the icon, vertically centered
-  tooltipPosition.value.x = rect.right + 8
-  tooltipPosition.value.y = rect.top + rect.height / 2
-  tooltipVisible.value = true
-}
-
-const hideTooltip = () => {
-  tooltipVisible.value = false
-  tooltipData.value = null
 }
 
 // Token tooltip functions

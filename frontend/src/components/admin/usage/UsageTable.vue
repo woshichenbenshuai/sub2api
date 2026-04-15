@@ -12,14 +12,12 @@
       >
         <template #cell-user="{ row }">
           <div class="text-sm">
-            <button
+            <span
               v-if="row.user?.email"
-              class="font-medium text-primary-600 underline decoration-dashed underline-offset-2 transition-colors hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-              @click="$emit('userClick', row.user_id, row.user?.email)"
-              :title="t('admin.usage.clickToViewBalance')"
+              class="font-medium text-gray-900 dark:text-white"
             >
               {{ row.user.email }}
-            </button>
+            </span>
             <span v-else class="font-medium text-gray-900 dark:text-white">-</span>
             <span class="ml-1 text-gray-500 dark:text-gray-400">#{{ row.user_id }}</span>
           </div>
@@ -139,27 +137,6 @@
           </div>
         </template>
 
-        <template #cell-cost="{ row }">
-          <div class="text-sm">
-            <div class="flex items-center gap-1.5">
-              <span class="font-medium text-green-600 dark:text-green-400">${{ row.actual_cost?.toFixed(6) || '0.000000' }}</span>
-              <!-- Cost Detail Tooltip -->
-              <div
-                class="group relative"
-                @mouseenter="showTooltip($event, row)"
-                @mouseleave="hideTooltip"
-              >
-                <div class="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-gray-100 transition-colors group-hover:bg-blue-100 dark:bg-gray-700 dark:group-hover:bg-blue-900/50">
-                  <Icon name="infoCircle" size="xs" class="text-gray-400 group-hover:text-blue-500 dark:text-gray-500 dark:group-hover:text-blue-400" />
-                </div>
-              </div>
-            </div>
-            <div v-if="row.account_rate_multiplier != null" class="mt-0.5 text-[11px] text-gray-400">
-              A ${{ accountBilled(row).toFixed(6) }}
-            </div>
-          </div>
-        </template>
-
         <template #cell-first_token="{ row }">
           <span v-if="row.first_token_ms != null" class="text-sm text-gray-600 dark:text-gray-400">{{ formatDuration(row.first_token_ms) }}</span>
           <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
@@ -256,109 +233,15 @@
     </div>
   </Teleport>
 
-  <!-- Cost Tooltip Portal -->
-  <Teleport to="body">
-    <div
-      v-if="tooltipVisible"
-      class="fixed z-[9999] pointer-events-none -translate-y-1/2"
-      :style="{
-        left: tooltipPosition.x + 'px',
-        top: tooltipPosition.y + 'px'
-      }"
-    >
-      <div class="whitespace-nowrap rounded-lg border border-gray-700 bg-gray-900 px-3 py-2.5 text-xs text-white shadow-xl dark:border-gray-600 dark:bg-gray-800">
-        <div class="space-y-1.5">
-          <!-- Cost Breakdown -->
-          <div class="mb-2 border-b border-gray-700 pb-1.5">
-            <div class="text-xs font-semibold text-gray-300 mb-1">{{ t('usage.costDetails') }}</div>
-            <div v-if="tooltipData && tooltipData.input_cost > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.inputCost') }}</span>
-              <span class="font-medium text-white">${{ tooltipData.input_cost.toFixed(6) }}</span>
-            </div>
-            <div v-if="tooltipData && tooltipData.output_cost > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.outputCost') }}</span>
-              <span class="font-medium text-white">${{ tooltipData.output_cost.toFixed(6) }}</span>
-            </div>
-            <!-- Token billing: show unit prices per 1M tokens -->
-            <template v-if="!tooltipData?.billing_mode || tooltipData.billing_mode === BILLING_MODE_TOKEN">
-              <div v-if="tooltipData && tooltipData.input_tokens > 0" class="flex items-center justify-between gap-4">
-                <span class="text-gray-400">{{ t('usage.inputTokenPrice') }}</span>
-                <span class="font-medium text-sky-300">{{ formatTokenPricePerMillion(tooltipData.input_cost, tooltipData.input_tokens) }} {{ t('usage.perMillionTokens') }}</span>
-              </div>
-              <div v-if="tooltipData && tooltipData.output_tokens > 0" class="flex items-center justify-between gap-4">
-                <span class="text-gray-400">{{ t('usage.outputTokenPrice') }}</span>
-                <span class="font-medium text-violet-300">{{ formatTokenPricePerMillion(tooltipData.output_cost, tooltipData.output_tokens) }} {{ t('usage.perMillionTokens') }}</span>
-              </div>
-            </template>
-            <!-- Per-request / image billing: show unit price -->
-            <div v-else class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ tooltipData.billing_mode === BILLING_MODE_IMAGE ? t('usage.imageUnitPrice') : t('usage.unitPrice') }}</span>
-              <span class="font-medium text-sky-300">${{ tooltipData.total_cost?.toFixed(6) || '0.000000' }}</span>
-            </div>
-            <div v-if="tooltipData && tooltipData.cache_creation_cost > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.cacheCreationCost') }}</span>
-              <span class="font-medium text-white">${{ tooltipData.cache_creation_cost.toFixed(6) }}</span>
-            </div>
-            <div v-if="tooltipData && tooltipData.cache_read_cost > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.cacheReadCost') }}</span>
-              <span class="font-medium text-white">${{ tooltipData.cache_read_cost.toFixed(6) }}</span>
-            </div>
-          </div>
-          <!-- Rate and Summary -->
-          <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.serviceTier') }}</span>
-            <span class="font-semibold text-cyan-300">{{ getUsageServiceTierLabel(tooltipData?.service_tier, t) }}</span>
-          </div>
-          <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.rate') }}</span>
-            <span class="font-semibold text-blue-400">{{ formatMultiplier(tooltipData?.rate_multiplier || 1) }}x</span>
-          </div>
-          <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.original') }}</span>
-            <span class="font-medium text-white">${{ tooltipData?.total_cost?.toFixed(6) || '0.000000' }}</span>
-          </div>
-          <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.userBilled') }}</span>
-            <span class="font-semibold text-green-400">${{ tooltipData?.actual_cost?.toFixed(6) || '0.000000' }}</span>
-          </div>
-          <!-- Account billing (separated from user billing) -->
-          <div class="flex items-center justify-between gap-6 border-t border-gray-700 pt-1.5">
-            <span class="text-gray-400">{{ t('usage.accountMultiplier') }}</span>
-            <span class="font-semibold text-blue-400">{{ formatMultiplier(tooltipData?.account_rate_multiplier ?? 1) }}x</span>
-          </div>
-          <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.accountBilled') }}</span>
-            <span class="font-semibold text-green-400">
-              ${{ accountBilled({
-                total_cost: tooltipData?.total_cost,
-                account_stats_cost: tooltipData?.account_stats_cost,
-                account_rate_multiplier: tooltipData?.account_rate_multiplier,
-              }).toFixed(6) }}
-            </span>
-          </div>
-        </div>
-        <div class="absolute right-full top-1/2 h-0 w-0 -translate-y-1/2 border-b-[6px] border-r-[6px] border-t-[6px] border-b-transparent border-r-gray-900 border-t-transparent dark:border-r-gray-800"></div>
-      </div>
-    </div>
-  </Teleport>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatDateTime, formatReasoningEffort } from '@/utils/format'
-import { formatCacheTokens, formatMultiplier } from '@/utils/formatters'
-import { formatTokenPricePerMillion } from '@/utils/usagePricing'
-import { getUsageServiceTierLabel } from '@/utils/usageServiceTier'
+import { formatCacheTokens } from '@/utils/formatters'
 import { resolveUsageRequestType } from '@/utils/usageRequestType'
-import { getBillingModeLabel, getBillingModeBadgeClass, BILLING_MODE_TOKEN, BILLING_MODE_IMAGE } from '@/utils/billingMode'
-
-/** Compute the account-billed cost for display: (account_stats_cost ?? total_cost) * rate_multiplier */
-function accountBilled(row: { total_cost?: number | null; account_stats_cost?: number | null; account_rate_multiplier?: number | null }): number {
-  const base = row.account_stats_cost != null ? row.account_stats_cost : (row.total_cost ?? 0)
-  const result = base * (row.account_rate_multiplier ?? 1)
-  return Number.isNaN(result) ? 0 : result
-}
+import { getBillingModeLabel, getBillingModeBadgeClass, BILLING_MODE_IMAGE } from '@/utils/billingMode'
 
 import DataTable from '@/components/common/DataTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -382,15 +265,9 @@ withDefaults(defineProps<Props>(), {
   defaultSortOrder: 'asc'
 })
 defineEmits<{
-  userClick: [userID: number, email?: string]
   sort: [key: string, order: 'asc' | 'desc']
 }>()
 const { t } = useI18n()
-
-// Tooltip state - cost
-const tooltipVisible = ref(false)
-const tooltipPosition = ref({ x: 0, y: 0 })
-const tooltipData = ref<AdminUsageLog | null>(null)
 
 // Tooltip state - token
 const tokenTooltipVisible = ref(false)
@@ -423,21 +300,6 @@ const formatDuration = (ms: number | null | undefined): string => {
   if (ms == null) return '-'
   if (ms < 1000) return `${ms}ms`
   return `${(ms / 1000).toFixed(2)}s`
-}
-
-// Cost tooltip functions
-const showTooltip = (event: MouseEvent, row: AdminUsageLog) => {
-  const target = event.currentTarget as HTMLElement
-  const rect = target.getBoundingClientRect()
-  tooltipData.value = row
-  tooltipPosition.value.x = rect.right + 8
-  tooltipPosition.value.y = rect.top + rect.height / 2
-  tooltipVisible.value = true
-}
-
-const hideTooltip = () => {
-  tooltipVisible.value = false
-  tooltipData.value = null
 }
 
 // Token tooltip functions
