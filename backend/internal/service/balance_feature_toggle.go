@@ -8,3 +8,8 @@ const balanceBillingEnabled = false
 func isBalanceBillingEnabled() bool {
 	return balanceBillingEnabled
 }
+
+// IsBalanceBillingEnabled reports whether user-balance billing is enabled.
+func IsBalanceBillingEnabled() bool {
+	return isBalanceBillingEnabled()
+}
