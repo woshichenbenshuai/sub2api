@@ -22,10 +22,10 @@
           <td class="py-1 text-right text-gray-500 dark:text-gray-400">
             {{ formatTokens(user.total_tokens) }}
           </td>
-          <td class="py-1 text-right text-green-600 dark:text-green-400">
+          <td v-if="showCostColumns" class="py-1 text-right text-green-600 dark:text-green-400">
             ${{ formatCost(user.actual_cost) }}
           </td>
-          <td class="py-1 pr-1 text-right text-gray-400 dark:text-gray-500">
+          <td v-if="showCostColumns" class="py-1 pr-1 text-right text-gray-400 dark:text-gray-500">
             ${{ formatCost(user.cost) }}
           </td>
         </tr>
@@ -41,10 +41,14 @@ import type { UserBreakdownItem } from '@/types'
 
 const { t } = useI18n()
 
-defineProps<{
+withDefaults(defineProps<{
   items: UserBreakdownItem[]
   loading?: boolean
-}>()
+  showCostColumns?: boolean
+}>(), {
+  loading: false,
+  showCostColumns: true,
+})
 
 const formatTokens = (value: number): string => {
   if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`

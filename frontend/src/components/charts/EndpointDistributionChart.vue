@@ -117,6 +117,7 @@
                   <UserBreakdownSubTable
                     :items="breakdownItems"
                     :loading="breakdownLoading"
+                    :show-cost-columns="showCostColumns"
                   />
                 </td>
               </tr>
