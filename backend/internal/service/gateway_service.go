@@ -7355,7 +7355,7 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 				slog.Error("increment subscription usage failed", "subscription_id", p.Subscription.ID, "error", err)
 			}
 		}
-	} else {
+	} else if isBalanceBillingEnabled() {
 		if cost.ActualCost > 0 {
 			if err := deps.userRepo.DeductBalance(billingCtx, p.User.ID, cost.ActualCost); err != nil {
 				slog.Error("deduct balance failed", "user_id", p.User.ID, "error", err)
@@ -7453,7 +7453,7 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 	if p.IsSubscriptionBill && p.Subscription != nil && p.Cost.TotalCost > 0 {
 		cmd.SubscriptionID = &p.Subscription.ID
 		cmd.SubscriptionCost = p.Cost.TotalCost
-	} else if p.Cost.ActualCost > 0 {
+	} else if isBalanceBillingEnabled() && p.Cost.ActualCost > 0 {
 		cmd.BalanceCost = p.Cost.ActualCost
 	}
 
@@ -7514,7 +7514,7 @@ func finalizePostUsageBilling(p *postUsageBillingParams, deps *billingDeps, resu
 		if p.Cost.TotalCost > 0 && p.User != nil && p.APIKey != nil && p.APIKey.GroupID != nil {
 			deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, *p.APIKey.GroupID, p.Cost.TotalCost)
 		}
-	} else if p.Cost.ActualCost > 0 && p.User != nil {
+	} else if isBalanceBillingEnabled() && p.Cost.ActualCost > 0 && p.User != nil {
 		deps.billingCacheService.QueueDeductBalance(p.User.ID, p.Cost.ActualCost)
 	}
 
@@ -7526,7 +7526,9 @@ func finalizePostUsageBilling(p *postUsageBillingParams, deps *billingDeps, resu
 
 	// Notification checks run async — all parameters are already captured,
 	// no dependency on the request context or upstream connection.
-	go notifyBalanceLow(p, deps, result)
+	if isBalanceBillingEnabled() {
+		go notifyBalanceLow(p, deps, result)
+	}
 	go notifyAccountQuota(p, deps, result)
 }
 
@@ -7539,8 +7541,9 @@ func notifyBalanceLow(p *postUsageBillingParams, deps *billingDeps, result *Usag
 			slog.Error("panic in notifyBalanceLow", "recover", r)
 		}
 	}()
-	if p.IsSubscriptionBill || p.Cost.ActualCost <= 0 || p.User == nil || deps.balanceNotifyService == nil {
+	if !isBalanceBillingEnabled() || p.IsSubscriptionBill || p.Cost.ActualCost <= 0 || p.User == nil || deps.balanceNotifyService == nil {
 		slog.Debug("notifyBalanceLow: skipped",
+			"balance_billing_enabled", isBalanceBillingEnabled(),
 			"is_subscription", p.IsSubscriptionBill,
 			"actual_cost", p.Cost.ActualCost,
 			"user_nil", p.User == nil,
