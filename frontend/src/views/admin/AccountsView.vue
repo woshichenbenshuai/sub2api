@@ -141,7 +141,18 @@
         </div>
       </template>
       <template #table>
-        <AccountBulkActionsBar :selected-ids="selIds" @delete="handleBulkDelete" @reset-status="handleBulkResetStatus" @refresh-token="handleBulkRefreshToken" @edit="showBulkEdit = true" @clear="clearSelection" @select-page="selectPage" @toggle-schedulable="handleBulkToggleSchedulable" />
+        <AccountBulkActionsBar
+          :selected-ids="selIds"
+          :testing="bulkTestingConnection"
+          @delete="handleBulkDelete"
+          @reset-status="handleBulkResetStatus"
+          @refresh-token="handleBulkRefreshToken"
+          @test-connection="handleBulkTestConnection"
+          @edit="showBulkEdit = true"
+          @clear="clearSelection"
+          @select-page="selectPage"
+          @toggle-schedulable="handleBulkToggleSchedulable"
+        />
         <div ref="accountTableRef" class="flex min-h-0 flex-1 flex-col overflow-hidden">
         <DataTable
           ref="dataTableRef"
@@ -399,6 +410,7 @@ const scheduleModelOptions = ref<SelectOption[]>([])
 const togglingSchedulable = ref<number | null>(null)
 const menu = reactive<{show:boolean, acc:Account|null, pos:{top:number, left:number}|null}>({ show: false, acc: null, pos: null })
 const exportingData = ref(false)
+const bulkTestingConnection = ref(false)
 
 // Column settings
 const showColumnDropdown = ref(false)
@@ -1068,6 +1080,133 @@ const handleBulkRefreshToken = async () => {
   } catch (error) {
     console.error('Failed to bulk refresh token:', error)
     appStore.showError(String(error))
+  }
+}
+const pickDefaultTestModelID = (models: ClaudeModel[], platform?: string): string => {
+  if (models.length === 0) return ''
+  if (platform === 'gemini') return models[0].id
+  const sonnetModel = models.find((model) => model.id.includes('sonnet'))
+  return sonnetModel?.id || models[0].id
+}
+const runSingleAccountConnectionTest = async (account: Account): Promise<{ success: boolean; error?: string }> => {
+  let selectedModelID = ''
+  try {
+    const models = await adminAPI.accounts.getAvailableModels(account.id)
+    selectedModelID = pickDefaultTestModelID(models, account.platform)
+  } catch {
+    selectedModelID = ''
+  }
+
+  const token = localStorage.getItem('auth_token')
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+
+  const requestBody = selectedModelID ? { model_id: selectedModelID } : {}
+
+  const response = await fetch(`/api/v1/admin/accounts/${account.id}/test`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(requestBody)
+  })
+  if (!response.ok) {
+    return { success: false, error: `HTTP ${response.status}` }
+  }
+
+  const reader = response.body?.getReader()
+  if (!reader) {
+    return { success: false, error: 'No response body' }
+  }
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let result: { success: boolean; error?: string } | null = null
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const jsonStr = line.slice(6).trim()
+      if (!jsonStr) continue
+      try {
+        const event = JSON.parse(jsonStr) as { type?: string; success?: boolean; error?: string }
+        if (event.type === 'test_complete') {
+          result = event.success
+            ? { success: true }
+            : { success: false, error: event.error || 'Test failed' }
+        }
+        if (event.type === 'error') {
+          result = { success: false, error: event.error || 'Test failed' }
+        }
+      } catch {
+        // Ignore malformed SSE chunk
+      }
+    }
+  }
+
+  return result || { success: false, error: 'No completion event' }
+}
+const handleBulkTestConnection = async () => {
+  if (bulkTestingConnection.value) return
+  const accountIDs = [...selIds.value]
+  if (accountIDs.length === 0) return
+  if (!confirm(t('common.confirm'))) return
+
+  bulkTestingConnection.value = true
+  appStore.showInfo(t('common.loading'))
+
+  const accountMap = new Map(accounts.value.map(account => [account.id, account]))
+  let successCount = 0
+  const failedIDs: number[] = []
+
+  try {
+    for (const accountID of accountIDs) {
+      let account = accountMap.get(accountID)
+      if (!account) {
+        try {
+          account = await adminAPI.accounts.getById(accountID)
+        } catch {
+          failedIDs.push(accountID)
+          continue
+        }
+      }
+
+      try {
+        const result = await runSingleAccountConnectionTest(account)
+        if (result.success) {
+          successCount += 1
+        } else {
+          failedIDs.push(accountID)
+        }
+      } catch {
+        failedIDs.push(accountID)
+      }
+    }
+
+    const failedCount = failedIDs.length
+    if (failedCount === 0) {
+      appStore.showSuccess(`${t('admin.accounts.testSuccess')} (${successCount}/${accountIDs.length})`)
+      clearSelection()
+    } else if (successCount > 0) {
+      appStore.showWarning(t('admin.accounts.bulkActions.partialSuccess', { success: successCount, failed: failedCount }))
+      setSelectedIds(failedIDs)
+    } else {
+      appStore.showError(t('admin.accounts.testFailed'))
+      setSelectedIds(failedIDs)
+    }
+
+    await reload()
+  } finally {
+    bulkTestingConnection.value = false
   }
 }
 const updateSchedulableInList = (accountIds: number[], schedulable: boolean) => {
