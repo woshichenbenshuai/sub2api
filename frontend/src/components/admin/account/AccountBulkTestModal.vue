@@ -172,16 +172,22 @@ const loadModels = async () => {
     let intersectionIds: Set<string> | null = null
 
     for (const models of successfulLists) {
-      const currentIds = new Set(models.map((model) => model.id))
+      const currentIds = new Set<string>(models.map((model) => model.id))
       models.forEach((model) => {
         if (!allModelMap.has(model.id)) {
           allModelMap.set(model.id, model)
         }
       })
       if (intersectionIds === null) {
-        intersectionIds = currentIds
+        intersectionIds = new Set<string>(currentIds)
       } else {
-        intersectionIds = new Set([...intersectionIds].filter((id) => currentIds.has(id)))
+        const nextIntersection = new Set<string>()
+        for (const id of intersectionIds.values()) {
+          if (currentIds.has(id)) {
+            nextIntersection.add(id)
+          }
+        }
+        intersectionIds = nextIntersection
       }
     }
 
