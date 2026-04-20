@@ -143,7 +143,6 @@
       <template #table>
         <AccountBulkActionsBar
           :selected-ids="selIds"
-          :testing="bulkTestingConnection"
           @delete="handleBulkDelete"
           @reset-status="handleBulkResetStatus"
           @refresh-token="handleBulkRefreshToken"
@@ -308,6 +307,12 @@
     <SyncFromCrsModal :show="showSync" @close="showSync = false" @synced="reload" />
     <ImportDataModal :show="showImportData" @close="showImportData = false" @imported="handleDataImported" />
     <BulkEditAccountModal :show="showBulkEdit" :account-ids="selIds" :selected-platforms="selPlatforms" :selected-types="selTypes" :proxies="proxies" :groups="groups" @close="showBulkEdit = false" @updated="handleBulkUpdated" />
+    <AccountBulkTestModal
+      :show="showBulkTest"
+      :accounts="bulkTestAccounts"
+      @close="closeBulkTestModal"
+      @completed="handleBulkTestCompleted"
+    />
     <TempUnschedStatusModal :show="showTempUnsched" :account="tempUnschedAcc" @close="showTempUnsched = false" @reset="handleTempUnschedReset" />
     <ConfirmDialog :show="showDeleteDialog" :title="t('admin.accounts.deleteAccount')" :message="t('admin.accounts.deleteConfirm', { name: deletingAcc?.name })" :confirm-text="t('common.delete')" :cancel-text="t('common.cancel')" :danger="true" @confirm="confirmDelete" @cancel="showDeleteDialog = false" />
     <ConfirmDialog :show="showExportDataDialog" :title="t('admin.accounts.dataExport')" :message="t('admin.accounts.dataExportConfirmMessage')" :confirm-text="t('admin.accounts.dataExportConfirm')" :cancel-text="t('common.cancel')" @confirm="handleExportData" @cancel="showExportDataDialog = false">
@@ -345,6 +350,7 @@ import ImportDataModal from '@/components/admin/account/ImportDataModal.vue'
 import ReAuthAccountModal from '@/components/admin/account/ReAuthAccountModal.vue'
 import AccountTestModal from '@/components/admin/account/AccountTestModal.vue'
 import AccountStatsModal from '@/components/admin/account/AccountStatsModal.vue'
+import AccountBulkTestModal from '@/components/admin/account/AccountBulkTestModal.vue'
 import ScheduledTestsPanel from '@/components/admin/account/ScheduledTestsPanel.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
 import AccountStatusIndicator from '@/components/account/AccountStatusIndicator.vue'
@@ -410,7 +416,8 @@ const scheduleModelOptions = ref<SelectOption[]>([])
 const togglingSchedulable = ref<number | null>(null)
 const menu = reactive<{show:boolean, acc:Account|null, pos:{top:number, left:number}|null}>({ show: false, acc: null, pos: null })
 const exportingData = ref(false)
-const bulkTestingConnection = ref(false)
+const showBulkTest = ref(false)
+const bulkTestAccounts = ref<Account[]>([])
 
 // Column settings
 const showColumnDropdown = ref(false)
@@ -1082,132 +1089,61 @@ const handleBulkRefreshToken = async () => {
     appStore.showError(String(error))
   }
 }
-const pickDefaultTestModelID = (models: ClaudeModel[], platform?: string): string => {
-  if (models.length === 0) return ''
-  if (platform === 'gemini') return models[0].id
-  const sonnetModel = models.find((model) => model.id.includes('sonnet'))
-  return sonnetModel?.id || models[0].id
-}
-const runSingleAccountConnectionTest = async (account: Account): Promise<{ success: boolean; error?: string }> => {
-  let selectedModelID = ''
-  try {
-    const models = await adminAPI.accounts.getAvailableModels(account.id)
-    selectedModelID = pickDefaultTestModelID(models, account.platform)
-  } catch {
-    selectedModelID = ''
-  }
-
-  const token = localStorage.getItem('auth_token')
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json'
-  }
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
-
-  const requestBody = selectedModelID ? { model_id: selectedModelID } : {}
-
-  const response = await fetch(`/api/v1/admin/accounts/${account.id}/test`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(requestBody)
-  })
-  if (!response.ok) {
-    return { success: false, error: `HTTP ${response.status}` }
-  }
-
-  const reader = response.body?.getReader()
-  if (!reader) {
-    return { success: false, error: 'No response body' }
-  }
-
-  const decoder = new TextDecoder()
-  let buffer = ''
-  let result: { success: boolean; error?: string } | null = null
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() || ''
-
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue
-      const jsonStr = line.slice(6).trim()
-      if (!jsonStr) continue
-      try {
-        const event = JSON.parse(jsonStr) as { type?: string; success?: boolean; error?: string }
-        if (event.type === 'test_complete') {
-          result = event.success
-            ? { success: true }
-            : { success: false, error: event.error || 'Test failed' }
-        }
-        if (event.type === 'error') {
-          result = { success: false, error: event.error || 'Test failed' }
-        }
-      } catch {
-        // Ignore malformed SSE chunk
-      }
-    }
-  }
-
-  return result || { success: false, error: 'No completion event' }
-}
 const handleBulkTestConnection = async () => {
-  if (bulkTestingConnection.value) return
   const accountIDs = [...selIds.value]
   if (accountIDs.length === 0) return
-  if (!confirm(t('common.confirm'))) return
 
-  bulkTestingConnection.value = true
-  appStore.showInfo(t('common.loading'))
+  const localMap = new Map(accounts.value.map(account => [account.id, account]))
+  const missingIDs = accountIDs.filter(id => !localMap.has(id))
+  const fetchedMap = new Map<number, Account>()
 
-  const accountMap = new Map(accounts.value.map(account => [account.id, account]))
-  let successCount = 0
-  const failedIDs: number[] = []
-
-  try {
-    for (const accountID of accountIDs) {
-      let account = accountMap.get(accountID)
-      if (!account) {
-        try {
-          account = await adminAPI.accounts.getById(accountID)
-        } catch {
-          failedIDs.push(accountID)
-          continue
-        }
+  if (missingIDs.length > 0) {
+    const results = await Promise.allSettled(missingIDs.map(id => adminAPI.accounts.getById(id)))
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        fetchedMap.set(missingIDs[index], result.value)
       }
-
-      try {
-        const result = await runSingleAccountConnectionTest(account)
-        if (result.success) {
-          successCount += 1
-        } else {
-          failedIDs.push(accountID)
-        }
-      } catch {
-        failedIDs.push(accountID)
-      }
-    }
-
-    const failedCount = failedIDs.length
-    if (failedCount === 0) {
-      appStore.showSuccess(`${t('admin.accounts.testSuccess')} (${successCount}/${accountIDs.length})`)
-      clearSelection()
-    } else if (successCount > 0) {
-      appStore.showWarning(t('admin.accounts.bulkActions.partialSuccess', { success: successCount, failed: failedCount }))
-      setSelectedIds(failedIDs)
-    } else {
-      appStore.showError(t('admin.accounts.testFailed'))
-      setSelectedIds(failedIDs)
-    }
-
-    await reload()
-  } finally {
-    bulkTestingConnection.value = false
+    })
   }
+
+  const selectedAccounts = accountIDs
+    .map(id => localMap.get(id) || fetchedMap.get(id))
+    .filter((account): account is Account => Boolean(account))
+
+  if (selectedAccounts.length === 0) {
+    appStore.showError(t('common.error'))
+    return
+  }
+  if (selectedAccounts.length < accountIDs.length) {
+    appStore.showWarning(
+      t('admin.accounts.bulkActions.partialSuccess', {
+        success: selectedAccounts.length,
+        failed: accountIDs.length - selectedAccounts.length
+      })
+    )
+  }
+
+  bulkTestAccounts.value = selectedAccounts
+  showBulkTest.value = true
+}
+const closeBulkTestModal = () => {
+  showBulkTest.value = false
+  bulkTestAccounts.value = []
+}
+const handleBulkTestCompleted = async (payload: {
+  failedIds: number[]
+  successCount: number
+  failedCount: number
+}) => {
+  if (payload.failedCount === 0) {
+    clearSelection()
+  } else {
+    setSelectedIds(payload.failedIds)
+    if (payload.successCount > 0) {
+      appStore.showWarning(t('admin.accounts.bulkActions.partialSuccess', { success: payload.successCount, failed: payload.failedCount }))
+    }
+  }
+  await reload()
 }
 const updateSchedulableInList = (accountIds: number[], schedulable: boolean) => {
   if (accountIds.length === 0) return
